@@ -11,6 +11,7 @@ use regex::Regex;
 use tokio::fs::OpenOptions;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
+use chrono;
 use toml::Value;
 
 use serde::{Deserialize, Serialize};
@@ -27,7 +28,8 @@ struct MainConfig {
 
 #[derive(Serialize, Deserialize)]
 struct AttackData {
-    source: String,
+    timestamp: String,
+    source_addr: String,
     xml_payload: String,
     rce_command: Option<String>,
 }
@@ -135,28 +137,34 @@ async fn init_logger(logfile: String) {
 
 
 /// Check OpenWire packet and extract payload url if exists.
-async fn check_packet(packet: Vec<u8>, client_addr: String) -> Option<String>  {
-    let hex_packet: String  = hex::encode(packet.clone());
+async fn check_packet(packet: Vec<u8>, client_addr: String) -> Result<((), Option<String>), Box<dyn std::error::Error>> {
+    let hex_packet: String = hex::encode(packet.clone());
     debug!("{} - Got packet {}", client_addr, hex_packet);
-    // extract OpenWire ExceptionResponse (1f) from packet
-    if hex_packet[8..16].to_string() == "1f000000" {   
-        debug!("{} - Got OpenWire ExceptionResponse header |1f 00 00 00|", client_addr);
-        let packet = String::from_utf8(packet).unwrap();
-        // extract Throwable Message (payload url)
-        if packet.contains("org.springframework.context.support.ClassPathXmlApplicationContext") {
-            info!("{} - Got OpenWire payload ClassPathXmlApplicationContext! (Possible Exploitation)", client_addr);
-            let host_pattern: Regex = Regex::new(r"((http:\/\/|https:\/\/).*)").expect("Error! Invalid regex pattern");
-            if let Some(captures) = host_pattern.captures(packet.as_str()) {
-                if let Some(payload_url) = captures.get(1) {
-                    debug!("{} - Got url in OpenWire payload: {}", client_addr, payload_url.as_str());
-                    return Some(payload_url.as_str().to_string()); 
+
+    // Check if hex_packet is long enough to extract the desired substring
+    if hex_packet.len() >= 16 {
+        // extract OpenWire ExceptionResponse (1f) from packet
+        if hex_packet[8..16].to_string() == "1f000000" {
+            debug!("{} - Got OpenWire ExceptionResponse header |1f 00 00 00|", client_addr);
+            let packet: String = String::from_utf8_lossy(&packet).to_string();
+
+            // extract Throwable Message (payload url)
+            if packet.contains("org.springframework.context.support.ClassPathXmlApplicationContext") {
+                info!("{} - Got OpenWire payload ClassPathXmlApplicationContext! (Possible Exploitation)", client_addr);
+                let host_pattern: Regex = Regex::new(r"((http:\/\/|https:\/\/).*)").expect("Error! Invalid regex pattern");
+
+                if let Some(captures) = host_pattern.captures(packet.as_str()) {
+                    if let Some(payload_url) = captures.get(1) {
+                        debug!("{} - Got url in OpenWire payload: {}", client_addr, payload_url.as_str());
+                        return Ok(((), Some(payload_url.as_str().to_string())));
+                    }
+                } else {
+                    warn!("{} - Url hasn't found in OpenWire payload", client_addr);
                 }
-            } else {
-                warn!("{} - Url hasn't found in OpenWire payload", client_addr);
             }
         }
     }
-    return None;
+    Ok(((), None))
 }
 
 
@@ -252,36 +260,43 @@ async fn main() {
             Ok(((), buffer)) => {
                 debug!("{} - Received raw buffer: {:?}",client_addr, buffer);
                 // Check OpenWire packet and try to extract url from OpenWire payload
-                let extracted_url: Option<String> = check_packet(buffer, client_addr.clone()).await;
-                if let Some(url) = extracted_url {
-                    info!("{} - Url extracted from OpenWire payload: {}, making fake java callback to get xml stager payload...", client_addr, url);
-                    let mut attackdata = AttackData {
-                        source: client_addr.clone(),
-                        xml_payload: url.clone(), 
-                        rce_command: None
-                    };
-                     // Make fake java http(s) request to get xml payload and extract command from xml payload
-                    match make_java_callback(url, client_addr.clone()).await {
-                        Ok(((), rce_command)) => {
-                            if let Some(rce_command) = rce_command {
-                                info!("{} - Extracted RCE command from xml payload: {}", client_addr, rce_command);
-                                attackdata.rce_command = Some(rce_command);
+                match check_packet(buffer, client_addr.clone()).await {
+                    Ok(((), extracted_url)) => {
+                        if let Some(url) = extracted_url {
+                            info!("{} - Url extracted from OpenWire payload: {}, making fake java callback to get xml stager payload...", client_addr, url);
+                            let mut attackdata = AttackData {
+                                timestamp: chrono::offset::Local::now().to_string(),
+                                source_addr: client_addr.clone(),
+                                xml_payload: url.clone(), 
+                                rce_command: None
+                            };
+                            // Make fake java http(s) request to get xml payload and extract command from xml payload
+                            match make_java_callback(url, client_addr.clone()).await {
+                                Ok(((), rce_command)) => {
+                                    if let Some(rce_command) = rce_command {
+                                        info!("{} - Extracted RCE command from xml payload: {}", client_addr, rce_command);
+                                        attackdata.rce_command = Some(rce_command);
+                                    }
+                                }
+                                Err(err) => {
+                                    error!("{} - Error making java callback: {}", client_addr, err);
+                                }
+                            }
+                            match append_string_to_file(&main_config.outfile, to_string(&attackdata).unwrap().as_str()).await {
+                                Ok(()) => {
+                                    info!("{} - Exploitation information succesfully saved to file: {}", client_addr, &main_config.outfile);
+                                }
+                                Err(err) => {
+                                    error!("{} - Error appending to a file: {}", client_addr, err);
+                                }
                             }
                         }
-                        Err(err) => {
-                            error!("{} - Error making java callback: {}", client_addr, err);
-                        }
                     }
-                    match append_string_to_file(&main_config.outfile, to_string(&attackdata).unwrap().as_str()).await {
-                        Ok(()) => {
-                            info!("{} - Exploitation information succesfully saved to file: {}", client_addr, &main_config.outfile);
-                        }
-                        Err(err) => {
-                            error!("{} - Error appending to a file: {}", client_addr, err);
-                        }
+                    Err(err) => {
+                        error!("Error checking packet: {}", err);
+                    }
                     }
                 }
-            }
             Err(err) => {
                 error!("Error handling connection: {}", err);
             }
