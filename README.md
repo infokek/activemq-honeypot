@@ -7,7 +7,7 @@ Real usage example: [https://infokek.github.io/posts/tsunami-botnet-activemq-hon
 
 # How it works?
 
-Firstly, attacker sends specific packet to Apache ActiveMQ service. This packet contains ExceptionResponse with Class `org.springframework.context.support.ClassPathXmlApplicationContext` and Message which contains XML payload url.
+In real case attacker sends specific packet to Apache ActiveMQ service. This packet contains ExceptionResponse with Class `org.springframework.context.support.ClassPathXmlApplicationContext` and Message which contains XML payload url.
 | ![Attack Example](https://infokek.github.io/assets/2023-12-10-tsunami-botnet-activemq-honeypot/attack_example.png) |
 |:--:| 
 | *Attack Example* |
@@ -17,9 +17,9 @@ Secondly, vulnerable service downloads XML payload which commonly contains RCE c
 |:--:| 
 | *XML Payload Example* |
 
-This honeypot extracts attacker's ip addresses, XML payload url and RCE command from XML payload. Then this information can be parsed from JSON.
+This honeypot simulates vulnerable Apache ActiveMQ service and extracts attacker's ip addresses, XML payload url and RCE command from XML payload. Then this information can be parsed from JSON.
 
-You can check honeypot logs by path `logfile` that you specified in `Service.toml`.
+Honeypot logs can be checked by path `logfile` that you specified in `Service.toml`.
 | ![Honeypot Logs](https://infokek.github.io/assets/2023-12-10-tsunami-botnet-activemq-honeypot/real_attack_logs.png) |
 |:--:| 
 | *Honeypot Logs* |
@@ -32,9 +32,9 @@ Honeypot also creates JSON output with parsable indicators. You can specify path
 
 # Installation 
 
-You can deploy honeypot on your own server (for example VPS or VDS) in docker variant.
+Honeypot can be deployed on your own server (for example VPS or VDS) in docker variant.
 ### Configuration
-You can change service configuration file `Service.toml` by your own:
+Service configuration file `Service.toml` can be changed by your own:
 ```
 ip = "0.0.0.0" # listen ip address 
 port = 61616 # port (default for Apache ActiveMQ 61616)
@@ -49,7 +49,7 @@ cd activemq-honeypot
 docker compose up --build -d
 ```
 
-You also should disable original Apache ActiveMQ (if exists) and make sure that configuration port not used by another process. Service building can take some time.
+You also should disable original Apache ActiveMQ (if exists) and make sure that configured port not used by another process. Service building can take some time.
 
 # Troubleshooting
 You can create Issue using [https://github.com/infokek/activemq-honeypot/issues/new/choose](https://github.com/infokek/activemq-honeypot/issues/new/choose) if you have any bug or other problem.
