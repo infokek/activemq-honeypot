@@ -117,13 +117,13 @@ async fn handle_connection(mut socket: TcpStream) -> Result<((), Vec<u8>), Box<d
 async fn init_logger(logfile: String) {
     CombinedLogger::init(vec![
         TermLogger::new(
-            LevelFilter::Debug,
+            LevelFilter::Info,
             Config::default(),
             TerminalMode::Mixed,
             ColorChoice::Auto,
         ),
         WriteLogger::new(
-            LevelFilter::Debug,
+            LevelFilter::Info,
             Config::default(),
             std::fs::OpenOptions::new()
                 .append(true)

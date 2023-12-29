@@ -53,3 +53,8 @@ You also should disable original Apache ActiveMQ (if exists) and make sure that 
 
 # Troubleshooting
 You can create Issue using [https://github.com/infokek/activemq-honeypot/issues/new/choose](https://github.com/infokek/activemq-honeypot/issues/new/choose) if you have any bug or other problem.
+
+You also can change `LevelFilter` to `Debug` in `main.rs` and get more helpful debug info
+| ![Debug Level](assets/debug_level_example.png) |
+|:--:| 
+| *Debug LevelFilter* |
