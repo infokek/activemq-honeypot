@@ -10,3 +10,4 @@ services:
       - ./logs:/service/logs/
     ports:
       - "61616:61616"
+      - "80:9000"
