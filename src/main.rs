@@ -10,6 +10,7 @@ use tokio::io::AsyncWriteExt;
 use tokio::net::TcpListener;
 use chrono;
 use toml::Value;
+use std::sync::Arc;
 
 use serde_json::to_string;
 
@@ -103,9 +104,14 @@ async fn main() {
 
     let listener = TcpListener::bind(&main_config.addr).await.expect("Error! Failed to bind TCP listener");
     info!("Listening on {}", main_config.addr);
+    
 
-    let _ = bind_server(main_config.outfile.clone()).await;
-
+    let handle = tokio::spawn(async {
+        bind_server("file".to_string()).await;
+        // Do some async work
+        "return value"
+    });
+    
     while let Ok((socket, addr)) = listener.accept().await {
         let client_addr: String = format!("{}:{}", addr.ip(), addr.port());
         info!("Got new connection from {}", client_addr);
