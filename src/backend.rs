@@ -1,16 +1,9 @@
-use log::{info, debug, error, LevelFilter};
 use actix_web::{web, App, HttpServer, HttpResponse, Responder};
 use bcrypt::{verify, DEFAULT_COST};
 use std::fs::File;
 use std::io::Read;
 
 use crate::data::AttackData;
-
-#[derive(Debug)]
-struct User {
-    username: String,
-    password_hash: String,
-}
 
 const VALID_USER: &str = "user";
 const VALID_PASSWORD: &str = "password";
@@ -28,18 +21,18 @@ fn read_json_file(filename: &str) -> Result<AttackData, Box<dyn std::error::Erro
 }
 
 async fn get_data(outfile: String, form: web::Form<(String, String)>) -> impl Responder {
-    if form.0 == VALID_USER && verify(&form.1, &hash_password(VALID_PASSWORD)).unwrap() {
+    let form = form.into_inner();
+
+    if form.0 == VALID_USER.to_string() && verify(&form.1, &hash_password(VALID_PASSWORD)).unwrap() {
         match read_json_file(&outfile) {
-            Ok(attackdata) => info!("{:?}", attackdata),
-            Err(e) => error!("Error: {}", e),
+            Ok(attackdata) => HttpResponse::Ok().json(attackdata),
+            Err(e) => HttpResponse::InternalServerError().body(format!("Error: {}", e)),
         }
-        HttpResponse::Ok().body("Login successful!")
     } else {
         HttpResponse::Unauthorized().body("Invalid username or password")
     }
 }
 
-#[actix_web::main]
 pub async fn bind_server(outfile: String) -> std::io::Result<()> {
     HttpServer::new(move || {
         let outfile = outfile.clone();

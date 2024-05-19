@@ -102,9 +102,9 @@ async fn main() {
     init_logger(main_config.logfile).await;
 
     let listener = TcpListener::bind(&main_config.addr).await.expect("Error! Failed to bind TCP listener");
-    bind_server(main_config.outfile);
-
     info!("Listening on {}", main_config.addr);
+
+    let _ = bind_server(main_config.outfile.clone()).await;
 
     while let Ok((socket, addr)) = listener.accept().await {
         let client_addr: String = format!("{}:{}", addr.ip(), addr.port());
