@@ -25,4 +25,4 @@ jobs:
       with:
         name: activemq-honeypot-release
         path: |
-           target/release/activemq-honeypot
+           target/release/*

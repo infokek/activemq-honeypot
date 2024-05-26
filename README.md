@@ -52,13 +52,6 @@ You can enable api if you want to have access to `out.json`. Results can be down
 curl -X POST http://<api_ip>:<api_port>/ --data 'username=<api_user>&password=<api_password>'
 ```
 
-### Using releases
-```
-wget https://raw.githubusercontent.com/infokek/activemq-honeypot/main/Service.toml # download configuration example and edit by your own
-
-```
-
-
 ### Using docker
 ```
 git clone https://github.com/infokek/activemq-honeypot.git -b main
