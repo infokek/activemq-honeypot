@@ -17,6 +17,12 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Build
-      run: cargo build --verbose
+      run: cargo build --verbose --release
     - name: Run tests
       run: cargo test --verbose
+    - name: Archive production artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: activemq-honeypot-release
+        path: |
+           target/release/activemq-honeypot
