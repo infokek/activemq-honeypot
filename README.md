@@ -36,11 +36,28 @@ Honeypot can be deployed on your own server (for example VPS or VDS) in docker v
 ### Configuration
 Service configuration file `Service.toml` can be changed by your own:
 ```
-ip = "0.0.0.0" # listen ip address 
-port = 61616 # port (default for Apache ActiveMQ 61616)
+service_ip = "0.0.0.0" # listen ip address 
+service_port = 61616 # port (default for Apache ActiveMQ 61616)
 logfile = "logs/service.log" # main log file
 outfile = "logs/out.json" # output json for parsing
+api_enabled = false # enabled or disable api for downloading honeypot results (true/false)
+api_ip = "0.0.0.0" # listen ip address for api
+api_port = 9123 # port for api
+api_user = "user" # user for api auth
+api_password = "" # password for api auth
 ```
+
+You can enable api if you want to have access to `out.json`. Results can be downloaded using curl:
+```
+curl -X POST http://<api_ip>:<api_port>/ --data 'username=<api_user>&password=<api_password>'
+```
+
+### Using releases
+```
+wget https://raw.githubusercontent.com/infokek/activemq-honeypot/main/Service.toml # download configuration example and edit by your own
+
+```
+
 
 ### Using docker
 ```

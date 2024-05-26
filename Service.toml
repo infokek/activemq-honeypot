@@ -1,4 +1,9 @@
-ip = "0.0.0.0"
-port = 61616
+service_ip = "0.0.0.0"
+service_port = 61616
 logfile = "logs/service.log"
 outfile = "logs/out.json"
+api_enabled = false
+api_ip = "0.0.0.0"
+api_port = 9123
+api_user = "user"
+api_password = ""

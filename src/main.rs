@@ -17,43 +17,67 @@ mod fakeserver;
 use fakeserver::{handle_connection, make_java_callback, check_packet};
 
 mod backend;
-use backend::bind_server;
+use backend::bind_http_server;
 
 mod data;
 use data::AttackData;
 
 
 struct MainConfig {
-    addr: SocketAddr,
+    service_addr: SocketAddr,
     logfile: String,
     outfile: String,
+    api_enabled: bool,
+    api_addr: Option<String>,
+    api_user: Option<String>,
+    api_password: Option<String>
 }
 
 
 /// Read config from specific path. 
 /// Example: Config.toml
 /// ```
-/// ip = "0.0.0.0"
-/// port = 61616
+/// service_ip = "0.0.0.0"
+/// service_port = 61616
 /// log = "logs/service.log"
 /// outfile = "logs/out.json"
+/// api_enabled = false
+/// api_ip = "0.0.0.0"
+/// api_port = 9123
+/// api_user = ""
+/// api_password = ""
 /// ```
 async fn read_config(config_path: &str) -> MainConfig {
     let config: String = fs::read_to_string(config_path).expect("Error! Failed to read config file");
     let config: Value = toml::from_str(&config).expect("Error! Failed to parse config file");
 
-    let ip: &str = config["ip"].as_str().expect("Error! Invalid IP address in config file");
-    let port: u16 = config["port"].as_integer().expect("Error! Invalid port in config file") as u16;
-
-    let addr: SocketAddr = format!("{}:{}", ip, port).parse().expect("Error! Invalid socket address");
+    let ip: &str = config["service_ip"].as_str().expect("Error! Invalid IP address in config file");
+    let port: u16 = config["service_port"].as_integer().expect("Error! Invalid port in config file") as u16;
+    let service_addr: SocketAddr = format!("{}:{}", ip, port).parse().expect("Error! Invalid socket address");
+    
     let logfile: String = config["logfile"].as_str().expect("Error! Invalid logfile path in config file").to_string();
     let outfile: String = config["outfile"].as_str().expect("Error! Invalid outfile path in config file").to_string();
 
-    let main_config: MainConfig = MainConfig {
-        addr: addr,
+    let api_enabled: bool  = config["api_enabled"].as_bool().expect("Error! Invalid api enabled in config file");
+
+    let mut main_config: MainConfig = MainConfig {
+        service_addr: service_addr,
         logfile: logfile,
         outfile: outfile,
+        api_enabled: api_enabled,
+        api_addr: None,
+        api_user: None,
+        api_password: None
     };
+    
+    if api_enabled {
+        let api_ip: &str = config["api_ip"].as_str().expect("Error! Invalid IP address in config file");
+        let api_port: u16 = config["api_port"].as_integer().expect("Error! Invalid port in config file") as u16;
+        let api_addr: SocketAddr = format!("{}:{}", api_ip, api_port).parse().expect("Error! Invalid api address");
+        main_config.api_addr = Some(api_addr.to_string());
+        main_config.api_user = Some(config["api_user"].as_str().expect("Error! Invalid api user in config file").to_string());
+        main_config.api_password = Some(config["api_password"].as_str().expect("Error! Invalid api password in config file").to_string());        
+    }
 
     return main_config;
 }
@@ -83,7 +107,7 @@ async fn init_logger(logfile: String) {
 }
 
 
-// Append new line data to specific file.
+/// Append new line data to specific file.
 async fn append_string_to_file(path: &str, data: &str) -> Result<(), Box<dyn std::error::Error>> {
     let mut file = OpenOptions::new()
         .create(true)
@@ -101,17 +125,25 @@ async fn main() {
     let main_config: MainConfig = read_config("Service.toml").await;
     init_logger(main_config.logfile).await;
 
-    let listener = TcpListener::bind(&main_config.addr).await.expect("Error! Failed to bind TCP listener");
-    info!("Listening on {}", main_config.addr);
+    let outfile = main_config.outfile.clone();
 
-    let _ = bind_server(main_config.outfile.clone()).await;
+    if main_config.api_enabled {
+        tokio::task::spawn(async move {
+            let _ = bind_http_server(&main_config.api_addr.unwrap(),
+             outfile, main_config.api_user.unwrap(),
+              &main_config.api_password.unwrap());
+        });
+    }
 
+    let listener = TcpListener::bind(&main_config.service_addr).await.expect("Error! Failed to bind TCP listener");
+    info!("Listening on {}", main_config.service_addr);
+    
     while let Ok((socket, addr)) = listener.accept().await {
         let client_addr: String = format!("{}:{}", addr.ip(), addr.port());
         info!("Got new connection from {}", client_addr);
         match handle_connection(socket).await {
             Ok(((), buffer)) => {
-                debug!("{} - Received raw buffer: {:?}",client_addr, buffer);
+                debug!("{} - Received raw buffer: {:?}", client_addr, buffer);
                 // Check OpenWire packet and try to extract url from OpenWire payload
                 match check_packet(buffer, client_addr.clone()).await {
                     Ok(((), extracted_url)) => {
